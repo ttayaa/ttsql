@@ -5,9 +5,9 @@
 一款 零配置 基于mybatis的 框架 
 
 `<dependency>`
-    <groupId>io.github.ttayaa.ttsql</groupId>
-    <artifactId>ttsql-spring-boot-starter</artifactId>
-    <version>1.0.3</version>
+    `<groupId>`io.github.ttayaa.ttsql`</groupId>`
+    `<artifactId>`ttsql-spring-boot-starter`</artifactId>`
+    `<version>`1.0.3`</version>`
 `</dependency>`
 
 
