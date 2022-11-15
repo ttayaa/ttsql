@@ -4,11 +4,11 @@
 
 一款 零配置 基于mybatis的 框架 
 
-`<dependency>`
-    `<groupId>io.github.ttayaa.ttsql</groupId>`
-    `<artifactId>ttsql-spring-boot-starter</artifactId>`
-    `<version>1.0.3</version>`
-`</dependency>`
+`<dependency>`\n
+    `<groupId>io.github.ttayaa.ttsql</groupId>`\n
+    `<artifactId>ttsql-spring-boot-starter</artifactId>`\n
+    `<version>1.0.3</version>`\n
+`</dependency>`\n
 
 
 service层 不用继承  
