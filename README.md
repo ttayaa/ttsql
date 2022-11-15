@@ -12,8 +12,9 @@
 
 
 service层 不用继承  
-mapper层 不用继承 甚至不用谢mapper层   
-
+mapper层 不用继承 甚至不用写mapper层   
+用了框架 基本不写xml了 
+在mapper中 可以使用defaul 默认方法来写sql
 
 代码 比现在市面的框架  更接近 sql 
 
