@@ -2,14 +2,16 @@ package com.ttsql;
 
 
 import com.ttsql.Exception.NotCollectionOrArrayException;
+import com.ttsql.anno.TTRedisPrimaryKey;
+import com.ttsql.anno.TTSnowFlakePrimaryKey;
 import com.ttsql.bean.BuildSource;
 import com.ttsql.bean.SqlInfo;
 import com.ttsql.builder.JavaSqlInfoBuilder;
 import com.ttsql.builder.SqlInfoBuilder;
 import com.ttsql.core.ICustomAction;
-import com.ttsql.datasource.DynamicDataSource;
-import com.ttsql.helpers.*;
 import com.ttsql.page.TTPage;
+import com.ttsql.helpers.*;
+import com.ttsql.datasource.DynamicDataSource;
 import com.alibaba.fastjson.JSON;
 import org.apache.ibatis.annotations.Options;
 
@@ -21,6 +23,8 @@ import java.util.*;
 
 public final class TTSQL {
 
+    public static TTIdWorker idWorker = new TTIdWorker();
+    public static TTRedisIdWorker redisIdWorker = new TTRedisIdWorker();
 
     private BuildSource source = new BuildSource(SqlInfo.newInstance());
 
@@ -189,34 +193,42 @@ public final class TTSQL {
 
             Map map = sqlInfo.getMybatisMap();
 
-            map.put("map_keyId",null);
+           //如果没有主键值 那么就是使用数据库自增 那么就要做回显
+            if(primaryValue==null){
+                map.put("map_keyId",null);
 
-            Method method;
-            try {
-                //反射修改 update方法上面的Option注解
-                method =TTSQLMapper.class.getMethod("insert",Map.class);
-                Options annotation = method.getAnnotation(Options.class);
-                String keyColumn = StringHelper.smallHumpToUnderline(ReflectionHelper.getPrimaryField(entityCls).getName());
-                InvocationHandler invocationHandler = Proxy.getInvocationHandler(annotation);
-                Field declaredField = invocationHandler.getClass().getDeclaredField("memberValues");
-                declaredField.setAccessible(true);
-                Map memberValues = (Map)declaredField.get(invocationHandler);
-                memberValues.put("keyColumn",keyColumn);
-                memberValues.put("keyProperty","map_keyId");
+                Method method;
+                try {
+                    //反射修改 update方法上面的Option注解
+                    method =TTSQLMapper.class.getMethod("insert",Map.class);
+                    Options annotation = method.getAnnotation(Options.class);
+                    String keyColumn = StringHelper.smallHumpToUnderline(ReflectionHelper.getPrimaryField(entityCls).getName());
+                    InvocationHandler invocationHandler = Proxy.getInvocationHandler(annotation);
+                    Field declaredField = invocationHandler.getClass().getDeclaredField("memberValues");
+                    declaredField.setAccessible(true);
+                    Map memberValues = (Map)declaredField.get(invocationHandler);
+                    memberValues.put("keyColumn",keyColumn);
+                    memberValues.put("keyProperty","map_keyId");
 //                System.out.println(annotation.keyColumn());
 //                System.out.println(annotation.keyProperty());
 
-            }catch(Exception e){
+                }catch(Exception e){
 
-                e.printStackTrace();
+                    e.printStackTrace();
+
+                }
 
             }
 
 
             result = publicSqlMapper.insert(map);
-            //主键回显
-            ReflectionHelper.setValueToPrimaryField(entityObj,map.get("map_keyId"));
 
+            if(primaryValue==null){
+                //主键回显
+                ReflectionHelper.setValueToPrimaryField(entityObj,map.get("map_keyId"));
+            }else {
+                ReflectionHelper.setValueToPrimaryField(entityObj,primaryValue);
+            }
 
         }
         else if (sqlInfo.getSql().startsWith("UPDATE")){
@@ -381,7 +393,7 @@ public final class TTSQL {
         return ttsql;
     }
     //传入逻辑删除字段 和 删除的的值
-    public static <T> TTSQL deleteByIdOnField(Class cls,Object idValue,TTSQLFunction<T,?> function,Object logicDeleteValue) {
+    public static <T> TTSQL deleteByIdOnField(Class cls, Object idValue, TTSQLFunction<T,?> function, Object logicDeleteValue) {
         TTSQL ttsql = start();
         ttsql.entityCls = cls;
         String tableName = StringHelper.bigHumpToUnderline(cls.getSimpleName());
@@ -560,6 +572,7 @@ public final class TTSQL {
 
     private Object entityObj;
     private Field primaryField;
+    private Object primaryValue = null;
     public static TTSQL insertInto(Object obj) {
         TTSQL ttsql = start();
         ttsql.entityCls =obj.getClass();
@@ -569,16 +582,40 @@ public final class TTSQL {
 
         //如果传入的obj有主键id 那么就使用传入的
         //没有就使用数据库设置的
-
-
-
         List ignorePrimaryField = ReflectionHelper.getIgnorePrimaryField(obj,true);
+
 //        List fieldsList = ignorePrimaryField.get(0);
         List valuesList = (List) ignorePrimaryField.get(1);
         String fieldstr = (String)ignorePrimaryField.get(2);
         ttsql.primaryField = (Field)ignorePrimaryField.get(3);
 
-//        //如果存在主键那么就去掉
+
+        TTSnowFlakePrimaryKey snowFlakePrimaryKey = ttsql.primaryField.getAnnotation(TTSnowFlakePrimaryKey.class);
+        TTRedisPrimaryKey redisPrimaryKey = ttsql.primaryField.getAnnotation(TTRedisPrimaryKey.class);
+
+        try {
+            ttsql.primaryValue = ttsql.primaryField.get(obj);
+        }
+        catch (Exception e){
+            e.printStackTrace();
+        }
+
+        //如果使用了TTSnowFlakePrimaryKey注解 并且 主键没有值
+        //那么使用雪花算法
+        if (snowFlakePrimaryKey!=null && ttsql.primaryValue==null){
+            fieldstr = StringHelper.smallHumpToUnderline(ttsql.primaryField.getName())+","+fieldstr;
+            //使用雪花算法
+            ttsql.primaryValue = ttsql.idWorker.nextId()+"";
+            valuesList.add(0, ttsql.primaryValue);
+        }
+        //如果使用了TTRedisPrimaryKey注解 并且 主键没有值
+        //那么使用redis id 算法(也是类似雪花自增)
+        if (redisPrimaryKey!=null && ttsql.primaryValue==null){
+            fieldstr = StringHelper.smallHumpToUnderline(ttsql.primaryField.getName())+","+fieldstr;
+            ttsql.primaryValue = redisIdWorker.generateNextId();
+            valuesList.add(0, ttsql.primaryValue);
+        }
+
         return ttsql.insertInto(tableName+"("+fieldstr+")")
                 .values(valuesList.toArray());
 
@@ -602,6 +639,7 @@ public final class TTSQL {
 
         ttsql.update(tableName)
                 .set();
+        //拼接 ,
         for (int i = 0; i < fieldsList.size(); i++) {
             ttsql.equal(fieldsList.get(i).toString(),valuesList.get(i));
             if (i+1!=fieldsList.size()){
@@ -1799,4 +1837,10 @@ public final class TTSQL {
         return this.doIsNull(" OR ", field, match, false);
     }
 
+
+
+    public static <T> T convert(Object obj,Class<T> cls){
+        String json = JSON.toJSONString(obj);
+        return JSON.parseObject(json, cls);
+    }
 }

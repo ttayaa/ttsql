@@ -1,10 +1,9 @@
 package com.ttsql.helpers;
 
+
 import com.ttsql.Exception.NotFindPrimaryKeyException;
-import com.ttsql.anno.TTCreateField;
-import com.ttsql.anno.TTLogicField;
-import com.ttsql.anno.TTPrimaryKey;
-import com.ttsql.anno.TTUpdateField;
+import com.ttsql.Exception.SetManyPrimaryKeyException;
+import com.ttsql.anno.*;
 import com.alibaba.fastjson.JSON;
 import org.springframework.util.ClassUtils;
 import org.springframework.util.ReflectionUtils;
@@ -76,46 +75,37 @@ public class ReflectionHelper {
         throw new NoSuchFieldError(fieldName);
     }
 
-    //获取实体类主键 属性 (支持 mybatisplus 和 jpa)
+    //获取实体类主键 属性
     public static Field getPrimaryField(Class<?> clazz)  {
         Field[] fields = clazz.getDeclaredFields();
         Field item = null;
 
-        Class jpaID = null;
-        Class mpID =  null;
-        Class TTSQLID = null;
-
-        try { jpaID = Class.forName("javax.persistence.Id");}catch (Exception e){}
-        try { mpID = Class.forName("com.baomidou.mybatisplus.annotation.TableId");}catch (Exception e){}
-        TTSQLID = TTPrimaryKey.class;
-
-
-
         for (Field field : fields) {
 
-            if (mpID!=null){
-                Object id = field.getAnnotation(mpID);
-                if (id != null) {
-                    field.setAccessible(true);
-                    item = field;
-                    break;
-                }
+            Object autoId = field.getAnnotation(TTAutoPrimaryKey.class);
+            field.setAccessible(true);
+
+            if (autoId != null) {
+                item = field;
+                break;
             }
-            if (jpaID!=null){
-                Object id = field.getAnnotation(jpaID);
-                if (id != null) {
-                    field.setAccessible(true);
-                    item = field;
-                    break;
-                }
+            Object snowFlakeId = field.getAnnotation(TTSnowFlakePrimaryKey.class);
+            if (snowFlakeId != null) {
+                item = field;
+                break;
             }
-            if (TTSQLID!=null){
-                Object id = field.getAnnotation(TTSQLID);
-                if (id != null) {
-                    field.setAccessible(true);
-                    item = field;
-                    break;
-                }
+            Object redisId = field.getAnnotation(TTRedisPrimaryKey.class);
+            if (redisId != null) {
+                item = field;
+                break;
+            }
+            //如果多个注解都设置就抛出异常
+            if (
+                    (autoId != null)&&(snowFlakeId != null)||
+                    (autoId != null)&&(redisId != null)||
+                    (snowFlakeId != null)&&(redisId != null)
+            ){
+                throw new SetManyPrimaryKeyException("实体类上不能同时设置多种类型主键");
             }
 
         }
@@ -136,6 +126,7 @@ public class ReflectionHelper {
     // 和 属性值 数组(不包含主键)
     // 和 属性值 字符串 (不包含主键)
     // 和 主键Field
+
     public static List getIgnorePrimaryField(Object obj,boolean isInsert)  {
 
 
@@ -153,9 +144,8 @@ public class ReflectionHelper {
         for (Field declaredField : declaredFields) {
             declaredField.setAccessible(true);
             try {
-                //如果属性是主键 并且对应没有值
+                //如果属性是主键 并且属性值为空
                 if (pkName.equals(declaredField.getName()) && declaredField.get(obj)==null) {
-
 
                 } else {
 
@@ -205,6 +195,7 @@ public class ReflectionHelper {
         list.add(fieldBuiler.toString());
 
         list.add(primaryField);
+
 
 
         return list;
