@@ -1,0 +1,10 @@
+com.ttsql
+com.ttsql.Exception
+com.ttsql.anno
+com.ttsql.autoconfigure
+com.ttsql.bean
+com.ttsql.builder
+com.ttsql.core
+com.ttsql.datasource
+com.ttsql.helpers
+com.ttsql.page
