@@ -8,6 +8,7 @@
         <outputRelativeToContentRoot value="true" />
         <module name="TTSQL-Test" />
         <module name="TTSQL" />
+        <module name="ttsql-spring-boot-starter" />
         <module name="ttsql" />
       </profile>
     </annotationProcessing>
@@ -23,6 +24,7 @@
       <module name="TTSQL-Test" options="-parameters" />
       <module name="TTSQL-spring-boot-starter" options="-parameters" />
       <module name="ttsql" options="-parameters" />
+      <module name="ttsql-spring-boot-starter" options="" />
     </option>
   </component>
 </project>

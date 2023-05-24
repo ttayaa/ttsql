@@ -9,6 +9,7 @@ import org.springframework.util.ClassUtils;
 import org.springframework.util.ReflectionUtils;
 
 import java.beans.Introspector;
+import java.lang.annotation.Annotation;
 import java.lang.invoke.SerializedLambda;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -27,6 +28,8 @@ public class ReflectionHelper {
         Field field = ReflectionHelper.getField(function);
         return field.getName();
     }
+
+
 
     public <T, R> String getFieldName1(TTSQLFunction<T, R> function) {
         Field field = ReflectionHelper.getField(function);
@@ -144,6 +147,13 @@ public class ReflectionHelper {
         for (Field declaredField : declaredFields) {
             declaredField.setAccessible(true);
             try {
+
+                String filedName = StringHelper.smallHumpToUnderline(declaredField.getName());
+                //如果标记了是关键字那么加上''
+                if (checkKeywordField(declaredField)){
+                    filedName = "`"+filedName+"`";
+                }
+
                 //如果属性是主键 并且属性值为空
                 if (pkName.equals(declaredField.getName()) && declaredField.get(obj)==null) {
 
@@ -151,14 +161,12 @@ public class ReflectionHelper {
 
                     //如果是CreateField 并且是 insert语句
                     if(checkCreateField(declaredField)&&isInsert){
-                        String filedName = StringHelper.smallHumpToUnderline(declaredField.getName());
                         fieldBuiler.append(filedName).append(",");
                         valuesList.add(new Date());
                         fieldsList.add(filedName);
                     }
                     //如果是UpdateField
                    else if(checkUpdateField(declaredField)){
-                        String filedName = StringHelper.smallHumpToUnderline(declaredField.getName());
                         fieldBuiler.append(filedName).append(",");
                         valuesList.add(new Date());
                         fieldsList.add(filedName);
@@ -170,7 +178,6 @@ public class ReflectionHelper {
                         if (value==null){
                             continue;
                         }
-                        String filedName = StringHelper.smallHumpToUnderline(declaredField.getName());
                         fieldBuiler.append(filedName).append(",");
                         valuesList.add(value);
                         fieldsList.add(filedName);
@@ -221,16 +228,22 @@ public class ReflectionHelper {
         for (Field declaredField : declaredFields) {
             try {
 
+                String filedName = StringHelper.smallHumpToUnderline(declaredField.getName());
+                //如果标记了是关键字那么加上''
+                if (checkKeywordField(declaredField)){
+                    filedName = "`"+filedName+"`";
+                }
+
                 //如果是CreateField 并且是 insert语句
                 if(checkCreateField(declaredField)&&isInsert){
-                    String filedName = StringHelper.smallHumpToUnderline(declaredField.getName());
+
                     fieldBuiler.append(filedName).append(",");
                     valuesList.add(new Date());
                     fieldsList.add(filedName);
                 }
                 //如果是UpdateField
                 else if(checkUpdateField(declaredField)){
-                    String filedName = StringHelper.smallHumpToUnderline(declaredField.getName());
+
                     fieldBuiler.append(filedName).append(",");
                     valuesList.add(new Date());
                     fieldsList.add(filedName);
@@ -242,7 +255,6 @@ public class ReflectionHelper {
                     if (value==null){
                         continue;
                     }
-                    String filedName = StringHelper.smallHumpToUnderline(declaredField.getName());
                     fieldBuiler.append(filedName).append(",");
                     valuesList.add(value);
                     fieldsList.add(filedName);
@@ -274,7 +286,13 @@ public class ReflectionHelper {
         Field[] declaredFields = cls.getDeclaredFields();
         StringBuilder fieldBuiler = new StringBuilder();
         for (Field declaredField : declaredFields) {
-            fieldBuiler.append(StringHelper.smallHumpToUnderline(declaredField.getName())).append(",");
+
+            String filedName = StringHelper.smallHumpToUnderline(declaredField.getName());
+            //如果标记了是关键字那么加上''
+            if (checkKeywordField(declaredField)){
+                filedName = "`"+filedName+"`";
+            }
+            fieldBuiler.append(filedName).append(",");
         }
         if (declaredFields.length>0){
             fieldBuiler.deleteCharAt(fieldBuiler.length()-1);
@@ -327,6 +345,17 @@ public class ReflectionHelper {
         return true;
     }
 
+    //判断Feild 是否 标记了关键字
+    public static boolean checkKeywordField(Field field)  {
+
+        TTKeywordField keywordField = field.getAnnotation(TTKeywordField.class);
+        if (keywordField==null){
+            return false;
+        }
+        return true;
+    }
+
+
     //判断该类是否有逻辑删除字段
     // 并获取 注解中的DeleteValue值
     public static List getLogicFieldAndLogicAnnotationValue(Class cls)  {
@@ -350,5 +379,20 @@ public class ReflectionHelper {
         }
 
     }
+
+
+
+    //检测是否有表名注解
+    public static String checkTableName(Class cls) {
+        TTTableName anno = (TTTableName)cls.getAnnotation(TTTableName.class);
+        if (anno==null){
+           return StringHelper.bigHumpToUnderline(cls.getSimpleName());
+        }else {
+            String value = anno.value();
+            return value;
+        }
+
+    }
+
 
 }

@@ -80,6 +80,7 @@ public class StringHelper {
             matcher.appendReplacement(sb, "_" + matcher.group(0).toLowerCase());
         }
         matcher.appendTail(sb);
+
         return sb.toString();
     }
 

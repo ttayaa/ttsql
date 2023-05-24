@@ -32,6 +32,25 @@ public final class TTSQL {
 
     public static TTSQLMapper publicSqlMapper;
 
+    public static String getPrimaryValue(Object obj) {
+        Field primaryField = ReflectionHelper.getPrimaryField(obj.getClass());
+        if (primaryField!=null){
+            String pkName = primaryField.getName();
+            try {
+                Object value = primaryField.get(obj);
+
+                return value.toString();
+            }
+            catch (Exception e){
+                return null;
+            }
+
+        }else {
+            return null;
+        }
+
+    }
+
 
     public HashMap executeQueryOne(){
         end();
@@ -71,10 +90,27 @@ public final class TTSQL {
 
     public Integer executeQueryCount(){
 
-        HashMap map = executeQueryOne();
-        Object firstValue = map.values().iterator().next();
+        end();
 
-        Integer integer = Integer.valueOf(firstValue.toString());
+        SqlInfo sqlInfo = source.getSqlInfo();
+        String afterFromSql = sqlInfo.getSql().split("FROM")[1];
+        //查询数量
+        TTSQL countSQl = TTSQL.start()
+                .select("COUNT(*) FROM "+ afterFromSql);
+        //由于sql我们自己拼接 所以 还是要模拟
+        if(afterFromSql.contains("WHERE")){
+            //随便写一个 非0数字 ,否则 WHERE会被删掉
+            countSQl.whereConditionsCount = 1;
+        }
+
+        countSQl.source.getSqlInfo().setParams(sqlInfo.getParams());
+
+        countSQl.end();
+
+        List<HashMap> countMapList = countSQl.executeQueryList();
+        Object obj = countMapList.get(0).get("COUNT(*)");
+        Integer integer = Integer.valueOf(String.valueOf(obj));
+
         return integer;
     }
     public Integer executeQueryCount(String db){
@@ -115,30 +151,17 @@ public final class TTSQL {
     }
 
     public List<HashMap> executeQueryPage(TTPage page){
-        end();
 
-        SqlInfo sqlInfo = source.getSqlInfo();
-        String afterFromSql = sqlInfo.getSql().split("FROM")[1];
-        //查询数量
-       TTSQL countSQl = TTSQL.start()
-                .select("COUNT(*) FROM "+ afterFromSql);
-        //由于sql我们自己拼接 所以 还是要模拟
-       if(afterFromSql.contains("WHERE")){
-           //随便写一个 非0数字 ,否则 WHERE会被删掉
-           countSQl.whereConditionsCount = 1;
-       }
 
-        countSQl.source.getSqlInfo().setParams(sqlInfo.getParams());
 
-        countSQl.end();
-
-        List<HashMap> countMapList = countSQl.executeQueryList();
-        Object obj = countMapList.get(0).get("COUNT(*)");
-        Long total = Long.valueOf(String.valueOf(obj));
+        Integer count = executeQueryCount();
+        Long total = Long.valueOf(String.valueOf(count));
         page.setTotal(total);
         long totalPage = (total-1)/page.getPageSize() + 1;
         page.setTotalPage(totalPage);
         long pageIndex =(page.getPageNo()-1)* page.getPageSize();
+
+        SqlInfo sqlInfo = source.getSqlInfo();
 
 //       为了防注入风险
         sqlInfo.getJoin()
@@ -359,7 +382,7 @@ public final class TTSQL {
     public static <T> TTSQL delete(Class cls) {
         TTSQL ttsql = start();
         ttsql.entityCls = cls;
-        String tableName = StringHelper.bigHumpToUnderline(cls.getSimpleName());
+        String tableName = ReflectionHelper.checkTableName(cls);
        return ttsql.deleteFrom(tableName);
     }
 
@@ -367,7 +390,7 @@ public final class TTSQL {
     public static <T> TTSQL deleteById(Class cls,Object idValue) {
         TTSQL ttsql = start();
         ttsql.entityCls = cls;
-        String tableName = StringHelper.bigHumpToUnderline(cls.getSimpleName());
+        String tableName = ReflectionHelper.checkTableName(cls);
         String primaryField = StringHelper.smallHumpToUnderline(ReflectionHelper.getPrimaryField(cls).getName());
 
         List logicFieldAndLogicAnnotationValue = ReflectionHelper.getLogicFieldAndLogicAnnotationValue(cls);
@@ -396,7 +419,7 @@ public final class TTSQL {
     public static <T> TTSQL deleteByIdOnField(Class cls, Object idValue, TTSQLFunction<T,?> function, Object logicDeleteValue) {
         TTSQL ttsql = start();
         ttsql.entityCls = cls;
-        String tableName = StringHelper.bigHumpToUnderline(cls.getSimpleName());
+        String tableName = ReflectionHelper.checkTableName(cls);
         String primaryField = StringHelper.smallHumpToUnderline(ReflectionHelper.getPrimaryField(cls).getName());
         if (function!=null){
             String fieldName = StringHelper.smallHumpToUnderline(ReflectionHelper.getFieldName(function));
@@ -415,7 +438,7 @@ public final class TTSQL {
         }else {
             TTSQL ttsql = start();
             ttsql.entityCls = cls;
-            String tableName = StringHelper.bigHumpToUnderline(cls.getSimpleName());
+            String tableName = ReflectionHelper.checkTableName(cls);
             String primaryField = StringHelper.smallHumpToUnderline(ReflectionHelper.getPrimaryField(cls).getName());
 
             List logicFieldAndLogicAnnotationValue = ReflectionHelper.getLogicFieldAndLogicAnnotationValue(cls);
@@ -445,7 +468,7 @@ public final class TTSQL {
 
         TTSQL ttsql = start();
         ttsql.entityCls = cls;
-        String tableName = StringHelper.bigHumpToUnderline(cls.getSimpleName());
+        String tableName = ReflectionHelper.checkTableName(cls);
         String primaryField = StringHelper.smallHumpToUnderline(ReflectionHelper.getPrimaryField(cls).getName());
 
         String[] split=null;
@@ -491,7 +514,7 @@ public final class TTSQL {
         } else {
             TTSQL ttsql = start();
             ttsql.entityCls = cls;
-            String tableName = StringHelper.bigHumpToUnderline(cls.getSimpleName());
+            String tableName = ReflectionHelper.checkTableName(cls);
             String primaryField = StringHelper.smallHumpToUnderline(ReflectionHelper.getPrimaryField(cls).getName());
 
             List logicFieldAndLogicAnnotationValue = ReflectionHelper.getLogicFieldAndLogicAnnotationValue(cls);
@@ -529,7 +552,7 @@ public final class TTSQL {
             }else {
                 TTSQL ttsql = start();
                 ttsql.entityCls = cls;
-                String tableName = StringHelper.bigHumpToUnderline(cls.getSimpleName());
+                String tableName = ReflectionHelper.checkTableName(cls);
                 String primaryField = StringHelper.smallHumpToUnderline(ReflectionHelper.getPrimaryField(cls).getName());
                 String fieldName = StringHelper.smallHumpToUnderline(ReflectionHelper.getFieldName(function));
                 return ttsql.update(tableName)
@@ -555,7 +578,7 @@ public final class TTSQL {
 
                 TTSQL ttsql = start();
                 ttsql.entityCls = cls;
-                String tableName = StringHelper.bigHumpToUnderline(cls.getSimpleName());
+                String tableName = ReflectionHelper.checkTableName(cls);
                 String primaryField = StringHelper.smallHumpToUnderline(ReflectionHelper.getPrimaryField(cls).getName());
                 String fieldName = StringHelper.smallHumpToUnderline(ReflectionHelper.getFieldName(function));
                 return ttsql.update(tableName)
@@ -577,8 +600,8 @@ public final class TTSQL {
         TTSQL ttsql = start();
         ttsql.entityCls =obj.getClass();
         ttsql.entityObj = obj;
-        String tableName = StringHelper.bigHumpToUnderline(ttsql.entityCls.getSimpleName());
 
+        String tableName = ReflectionHelper.checkTableName(ttsql.entityCls);
 
         //如果传入的obj有主键id 那么就使用传入的
         //没有就使用数据库设置的
@@ -624,14 +647,15 @@ public final class TTSQL {
     public static TTSQL update(Class cls) {
         TTSQL ttsql = start();
         ttsql.entityCls =cls;
-        String tableName = StringHelper.bigHumpToUnderline(ttsql.entityCls.getSimpleName());
+        String tableName = ReflectionHelper.checkTableName(ttsql.entityCls);;
         return ttsql.update(tableName);
     }
     public static TTSQL updateById(Object obj) {
         TTSQL ttsql = start();
         ttsql.entityCls =obj.getClass();
         ttsql.entityObj = obj;
-        String tableName = StringHelper.bigHumpToUnderline(ttsql.entityCls.getSimpleName());
+
+        String tableName = ReflectionHelper.checkTableName(ttsql.entityCls);;
 
         List ignorePrimaryField = ReflectionHelper.getIgnorePrimaryField(obj,false);
         List fieldsList = (List) ignorePrimaryField.get(0);
@@ -676,7 +700,7 @@ public final class TTSQL {
         TTSQL ttsql = start();
         ttsql.entityCls =obj.getClass();
         ttsql.entityObj = obj;
-        String tableName = StringHelper.bigHumpToUnderline(ttsql.entityCls.getSimpleName());
+        String tableName = ReflectionHelper.checkTableName(ttsql.entityCls);;
 
         List ignorePrimaryField = ReflectionHelper.getField(obj,false);
         List fieldsList = (List) ignorePrimaryField.get(0);
@@ -710,7 +734,7 @@ public final class TTSQL {
         TTSQL ttsql = start();
         ttsql.entityCls =obj.getClass();
         ttsql.entityObj = obj;
-        String tableName = StringHelper.bigHumpToUnderline(ttsql.entityCls.getSimpleName());
+        String tableName = ReflectionHelper.checkTableName(ttsql.entityCls);;
 
         List ignorePrimaryField = ReflectionHelper.getField(obj,false);
         List fieldsList = (List) ignorePrimaryField.get(0);
@@ -766,7 +790,10 @@ public final class TTSQL {
     }
 
     public TTSQL from(Class cls) {
-        return this.from(StringHelper.bigHumpToUnderline(cls.getSimpleName()));
+
+       String tableName = ReflectionHelper.checkTableName(cls);
+
+        return this.from(tableName);
     }
 
 
